@@ -10,7 +10,14 @@ stop_words = data.split('\n')
 # key: domain/first_path, value: count
 domain_path_dict = {}
 
+# len of this is the number of unique pages
 all_crawled_urls = []
+
+# url with most number of words
+longest_page = ["none", 0]
+
+# key: ics.uci.edu subdomain, value: count
+ics_subdomains_dict = {}
 
 def scraper(url, resp):
     #f = open("crawled_list.txt", "a")
