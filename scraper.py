@@ -1,8 +1,18 @@
 import re
 from urllib.parse import urlparse
+from bs4 import BeautifulSoup
 
 def scraper(url, resp):
+    #f = open("crawled_list.txt", "a")
+    #f.write(url + '\n')
+    #f.close()
     links = extract_next_links(url, resp)
+    # code from https://beautiful-soup-4.readthedocs.io/en/latest/
+    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+    for lnk in soup.find_all('a'):
+        links.append(lnk.get('href'))
+    text = soup.get_text()
+
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
@@ -23,10 +33,14 @@ def is_valid(url):
     # There are already some conditions that return False.
     try:
         parsed = urlparse(url)
+
         if parsed.scheme not in set(["http", "https"]):
+            return False
+        if not re.match(".*\.(ics.uci.edu|cs.uci.edu|information.uci.edu|stat.uci.edu)$", parsed.netloc.lower()):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
+            + r"|Z|7zip|m4a|webm|rss|apk"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
             + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
