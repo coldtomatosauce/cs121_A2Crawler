@@ -164,15 +164,17 @@ def count_words(text):
 def count_domain_path(parsed_url):
     # update domain path dict
     # if count is greater or equal to 50, return false. Otherwise, return true
-    first_path = parsed_url.path.split('/')[1]
-    if first_path:
-        combined = parsed_url.netloc + '/' + first_path
-        if combined in domain_path_dict:
-            if domain_path_dict[combined] > 50:
-                return False
-            domain_path_dict[combined] += 1
-        else:
-            domain_path_dict[combined] = 1
+    path_split = parsed_url.path.split('/')
+    if len(path_split) <= 1:
+        return True
+    first_path = path_split[1]
+    combined = parsed_url.netloc + '/' + first_path
+    if combined in domain_path_dict:
+        if domain_path_dict[combined] > 50:
+            return False
+        domain_path_dict[combined] += 1
+    else:
+        domain_path_dict[combined] = 1
     return True
 
 
