@@ -99,19 +99,19 @@ def write_report(url):
     # write to file a report
     report = open("report.txt", "w")
     report.write("number of unique pages: " + str(len(all_crawled_links)) + '\n')
-    report.write("\nlongest page: " + longest_page[0] + ", words: " + longest_page[1] + '\n')
+    report.write("\nlongest page: " + longest_page[0] + ", words: " + str(longest_page[1]) + '\n')
     report.write("\nics subdomains:\n")
     for sub, count in ics_subdomains_dict.items():
-        print(f"\t{sub}: {count}")
+        report.write("\t" + sub + ": " + str(count) + '\n')
     report.write("\ncs subdomains:\n")
     for sub, count in cs_subdomains_dict.items():
-        print(f"\t{sub}: {count}")
+        report.write("\t" + sub + ": " + str(count) + '\n')
     report.write("\ninformation subdomains:\n")
     for sub, count in info_subdomains_dict.items():
-        print(f"\t{sub}: {count}")
+        report.write("\t" + sub + ": " + str(count) + '\n')
     report.write("\nstat subdomains:\n")
     for sub, count in stat_subdomains_dict.items():
-        print(f"\t{sub}: {count}")
+        report.write("\t" + sub + ": " + str(count) + '\n')
     report.close()
 
 def count_subdomain(parsed_url):
