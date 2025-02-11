@@ -11,20 +11,44 @@ stop_words = data.split('\n')
 domain_path_dict = {}
 
 # len of this is the number of unique pages
-all_crawled_urls = []
+all_crawled_links = set()
+
+all_added_frontier_links = set()
 
 # url with most number of words
 longest_page = ["none", 0]
 
-# key: ics.uci.edu subdomain, value: count
-ics_subdomains_dict = {}
+# key: subdomain, value: count
+ics_subdomains_dict = {} # for report
+cs_subdomains_dict = {}
+info_subdomains_dict = {}
+stat_subdomains_dict = {}
 
 def scraper(url, resp):
-    #f = open("crawled_list.txt", "a")
-    #f.write(url + '\n')
-    #f.close()
+    write_files(url)
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
+
+def write_files(url):
+    f = open("crawled_list.txt", "a")
+    f.write(url + '\n')
+    f.close()
+
+    report = open("report.txt", "w")
+    report.write("number of unique pages: " + str(len(all_crawled_links)) + '\n')
+    report.write("\nlongest page: " + longest_page[0] + ", words: " + longest_page[1] + '\n')
+    report.write("\nics subdomains:\n")
+    for sub, count in ics_subdomains_dict.items():
+        print(f"\t{sub}: {count}")
+    report.write("\ncs subdomains:\n")
+    for sub, count in cs_subdomains_dict.items():
+        print(f"\t{sub}: {count}")
+    report.write("\ninformation subdomains:\n")
+    for sub, count in info_subdomains_dict.items():
+        print(f"\t{sub}: {count}")
+    report.write("\nstat subdomains:\n")
+    for sub, count in stat_subdomains_dict.items():
+        print(f"\t{sub}: {count}")
 
 def extract_next_links(url, resp):
     # Implementation required.
@@ -38,7 +62,7 @@ def extract_next_links(url, resp):
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
     if resp.status != 200:
         return []
-    all_crawled_urls.append(resp.url)
+    all_crawled_links.add(resp.url)
     # code from https://beautiful-soup-4.readthedocs.io/en/latest/
     links = []
     soup = BeautifulSoup(resp.raw_response.content, 'lxml')
@@ -52,21 +76,63 @@ def extract_next_links(url, resp):
 
     links_res = []
     for link in valid_links:
-        parsed_url = urlparse(link).geturl()
-        if parsed_url in all_crawled_urls: # if link has already been crawled
+        parsed_url = urlparse(link)._replace(fragment="")
+        clean_link = parsed_url.geturl()
+        if clean_link in all_crawled_links or clean_link in all_added_frontier_links: # if link has already been crawled
             break
         text = soup.get_text()
         total_words = len(text.split())
-        if total_words < 200: #  if low information value, skip
+        if total_words < 300: #  if low word count, skip
             break
-        if not count_domain_path(link): # if domain and first segment of path is repeated too much, skip
+        if not count_domain_path(parsed_url): # if domain and first segment of path is repeated too much, skip
             break
 
-        links_res.append(link)
-        count_words(link)
+        # if link will be downloaded
+        if total_words > longest_page[1]:
+            longest_page[0] = clean_link
+
+        count_subdomain(parsed_url)
+        links_res.append(clean_link)
+        count_words(clean_link)
 
     return links_res
 
+def count_subdomain(parsed_url):
+    subdomain = parsed_url.netloc.lstrip('w.').split('.')[0]
+    if re.match(".*(ics.uci.edu)$", parsed_url.netloc):
+        if subdomain == "ics":
+            return
+        update_count(subdomain, ics_subdomains_dict)
+    elif re.match(".*cs.uci.edu$", parsed_url.netloc):
+        if subdomain == "cs":
+            return
+        update_count(subdomain, cs_subdomains_dict)
+    elif re.match(".*information.uci.edu$", parsed_url.netloc):
+        if subdomain == "information":
+            return
+        update_count(subdomain, info_subdomains_dict)
+    elif re.match(".*stat.uci.edu$", parsed_url.netloc):
+        if subdomain == "stat":
+            return
+        update_count(subdomain, stat_subdomains_dict)
+
+def update_count(key, dictionary):
+    if key in dict:
+        dictionary[key] += 1
+    else:
+        dictionary[key] = 1
+
+def tokenize(text):
+    tokens = set()
+    text = text.lower()
+    # using regex, replace all non-alphanumeric characters with space
+    text = re.sub(r"[^a-zA-Z0-9]", " ", text)
+    for word in text.split():
+        if word not in stop_words:
+            tokens.add(word)
+
+    tokens = list(tokens)
+    return tokens
 
 def count_words(text):
     # update words dictionary of word and count
@@ -77,19 +143,20 @@ def count_words(text):
         elif word not in words_dict and word not in stop_words:
             words_dict[word] = 1
 
-def count_domain_path(url):
+def count_domain_path(parsed_url):
     # update domain path dict
     # if count is greater or equal to 50, return false. Otherwise, return true
-    parsed = urlparse(url)
-    first_path = parsed.path.split('/')[1]
-    combined = parsed.netloc + '/' + first_path
-    if combined in domain_path_dict:
-        if domain_path_dict[combined] > 50:
-            return False
-        domain_path_dict[combined] += 1
-    else:
-        domain_path_dict[combined] = 1
+    first_path = parsed_url.path.split('/')[1]
+    if first_path:
+        combined = parsed_url.netloc + '/' + first_path
+        if combined in domain_path_dict:
+            if domain_path_dict[combined] > 50:
+                return False
+            domain_path_dict[combined] += 1
+        else:
+            domain_path_dict[combined] = 1
     return True
+
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
@@ -97,10 +164,9 @@ def is_valid(url):
     # There are already some conditions that return False.
     try:
         parsed = urlparse(url)
-
         if parsed.scheme not in set(["http", "https"]):
             return False
-        if not re.match(".*\.(ics.uci.edu|cs.uci.edu|information.uci.edu|stat.uci.edu)$", parsed.netloc.lower()):
+        if not re.match(".*(ics.uci.edu|cs.uci.edu|information.uci.edu|stat.uci.edu)$", parsed.netloc.lower()):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
