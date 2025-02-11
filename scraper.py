@@ -135,7 +135,7 @@ def count_subdomain(parsed_url):
         update_count(subdomain, stat_subdomains_dict)
 
 def update_count(key, dictionary):
-    if key in dict:
+    if key in dictionary:
         dictionary[key] += 1
     else:
         dictionary[key] = 1
