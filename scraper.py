@@ -175,7 +175,7 @@ def is_below_count_domain_path(parsed_url):
     first_path = path_split[1]
     combined = parsed_url.netloc + '/' + first_path
     if combined in domain_path_dict:
-        if domain_path_dict[combined] > 50:
+        if domain_path_dict[combined] > 100:
             return False
         domain_path_dict[combined] += 1
     else:
