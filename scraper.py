@@ -1,6 +1,7 @@
 import re
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+from itertools import islice
 
 # key: word, value: count
 words_dict = {}
@@ -43,6 +44,7 @@ def extract_next_links(url, resp):
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
     if resp.status != 200:
+        write_skipped_link(resp.url)
         return []
 
     # code from https://beautiful-soup-4.readthedocs.io/en/latest/
@@ -60,6 +62,14 @@ def extract_next_links(url, resp):
     # decide to crawl link
     crawled_links.add(resp.url)
     write_crawled_link(resp.url) # append crawled link to file
+
+    # update subdomain count
+    cur_parsed_url = urlparse(resp.url)._replace(fragment="")
+    cur_clean_link = cur_parsed_url.geturl()
+    count_subdomain(cur_parsed_url)
+
+    # update word dictionary
+    count_words(cur_clean_link)
 
     if total_words > longest_page[1]:
         longest_page[0] = resp.url
@@ -86,12 +96,12 @@ def extract_next_links(url, resp):
         if clean_link in crawled_links or clean_link in added_frontier_links:
             break
         # if domain and first segment of path is repeated over the threshold
-        if not count_domain_path(parsed_url):
+        if not is_below_count_domain_path(parsed_url):
             write_skipped_link(resp.url)
             break
-        count_subdomain(parsed_url)
+        # decided link will be added to frontier
+        added_frontier_links.add(clean_link)
         links_res.append(clean_link)
-        count_words(clean_link)
 
     return links_res
 
@@ -118,12 +128,19 @@ def write_report(url):
     report.write("\ncs subdomains:\n")
     for sub, count in cs_subdomains_dict.items():
         report.write("\t" + sub + ": " + str(count) + '\n')
-    report.write("\ninformation subdomains:\n")
+    report.write("\ninformatics subdomains:\n")
     for sub, count in info_subdomains_dict.items():
         report.write("\t" + sub + ": " + str(count) + '\n')
     report.write("\nstat subdomains:\n")
     for sub, count in stat_subdomains_dict.items():
         report.write("\t" + sub + ": " + str(count) + '\n')
+
+    sorted_dict = [(v, k) for k, v in words_dict.items()]
+    sorted_dict.sort(reverse=True)
+
+    report.write("\nsorted words:\n")
+    for i, (count, word) in enumerate(islice(sorted_dict, 50)):
+        report.write(str(i) + ". "+ word + ", " + str(count) + '\n')
     report.close()
 
 def count_subdomain(parsed_url):
@@ -137,8 +154,8 @@ def count_subdomain(parsed_url):
         if subdomain == "cs":
             return
         update_count(subdomain, cs_subdomains_dict)
-    elif re.match(".*(information.uci.edu)$", parsed_url.netloc):
-        if subdomain == "information":
+    elif re.match(".*(informatics.uci.edu)$", parsed_url.netloc):
+        if subdomain == "informatics":
             return
         update_count(subdomain, info_subdomains_dict)
     elif re.match(".*(stat.uci.edu)$", parsed_url.netloc):
@@ -173,7 +190,7 @@ def count_words(text):
         elif word not in words_dict and word not in stop_words:
             words_dict[word] = 1
 
-def count_domain_path(parsed_url):
+def is_below_count_domain_path(parsed_url):
     # update domain path dict
     # if count is greater or equal to 50, return false. Otherwise, return true
     path_split = parsed_url.path.split('/')
@@ -198,7 +215,7 @@ def is_valid(url):
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        if not re.match(".*(ics.uci.edu|cs.uci.edu|information.uci.edu|stat.uci.edu)$", parsed.netloc.lower()):
+        if not re.match(".*(ics.uci.edu|cs.uci.edu|informatics.uci.edu|stat.uci.edu)$", parsed.netloc.lower()):
             return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
