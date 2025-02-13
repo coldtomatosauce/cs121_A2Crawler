@@ -12,9 +12,11 @@ stop_words = data.split('\n')
 domain_path_dict = {}
 
 # len of this is the number of unique pages
-all_crawled_links = set()
+crawled_links = set()
 
-all_added_frontier_links = set()
+added_frontier_links = set()
+
+skipped_links = set()
 
 # url with most number of words
 longest_page = ["none", 0]
@@ -50,15 +52,18 @@ def extract_next_links(url, resp):
 
     # count words
     total_words = len(tokenize(text))
-    if total_words < 300:  # if low word count, skip
+    if total_words < 10:  # if low word count, skip
+        write_skipped_link(resp.url)
         return []
 
+
     # decide to crawl link
-    all_crawled_links.add(resp.url)
+    crawled_links.add(resp.url)
     write_crawled_link(resp.url) # append crawled link to file
 
     if total_words > longest_page[1]:
         longest_page[0] = resp.url
+        longest_page[1] = total_words
 
     # extract links
     links = []
@@ -78,16 +83,23 @@ def extract_next_links(url, resp):
         parsed_url = urlparse(link)._replace(fragment="")
         clean_link = parsed_url.geturl()
         # if link has already been or will be crawled
-        if clean_link in all_crawled_links or clean_link in all_added_frontier_links:
+        if clean_link in crawled_links or clean_link in added_frontier_links:
             break
         # if domain and first segment of path is repeated over the threshold
         if not count_domain_path(parsed_url):
+            write_skipped_link(resp.url)
             break
         count_subdomain(parsed_url)
         links_res.append(clean_link)
         count_words(clean_link)
 
     return links_res
+
+def write_skipped_link(link):
+    # append skipped link to file
+    f = open("skipped_list.txt", "a")
+    f.write(link + '\n')
+    f.close()
 
 def write_crawled_link(link):
     # append crawled link to file
@@ -98,7 +110,7 @@ def write_crawled_link(link):
 def write_report(url):
     # write to file a report
     report = open("report.txt", "w")
-    report.write("number of unique pages: " + str(len(all_crawled_links)) + '\n')
+    report.write("number of unique pages: " + str(len(crawled_links)) + '\n')
     report.write("\nlongest page: " + longest_page[0] + ", words: " + str(longest_page[1]) + '\n')
     report.write("\nics subdomains:\n")
     for sub, count in ics_subdomains_dict.items():
