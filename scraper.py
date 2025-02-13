@@ -11,14 +11,9 @@ stop_words = data.split('\n')
 
 # key: domain/first_path, value: count
 domain_path_dict = {}
-
 # len of this is the number of unique pages
 crawled_links = set()
-
 added_frontier_links = set()
-
-skipped_links = set()
-
 # url with most number of words
 longest_page = ["none", 0]
 
@@ -43,8 +38,10 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    if resp.status != 200:
-        write_skipped_link(resp.url)
+
+    # if status is client error or server error, do not crawl link
+    if resp.status >= 400:
+        append_to_file("skipped_list.txt", resp.url, True)
         return []
 
     # code from https://beautiful-soup-4.readthedocs.io/en/latest/
@@ -52,28 +49,20 @@ def extract_next_links(url, resp):
     soup = BeautifulSoup(resp.raw_response.content, 'lxml')
     text = soup.get_text()
 
-    # count words
-    total_words = len(tokenize(text))
-    if total_words < 10:  # if low word count, skip
-        write_skipped_link(resp.url)
-        return []
-
-
     # decide to crawl link
     crawled_links.add(resp.url)
-    write_crawled_link(resp.url) # append crawled link to file
+    append_to_file("all_crawled_list.txt", resp.url, False)
 
-    # update subdomain count
-    cur_parsed_url = urlparse(resp.url)._replace(fragment="")
-    cur_clean_link = cur_parsed_url.geturl()
-    count_subdomain(cur_parsed_url)
-
-    # update word dictionary
-    count_words(cur_clean_link)
-
+    # count words & update word dict
+    total_words = len(tokenize(text))
     if total_words > longest_page[1]:
         longest_page[0] = resp.url
         longest_page[1] = total_words
+
+    # update subdomain count
+    cur_parsed_url = urlparse(resp.url)._replace(fragment="")
+    #cur_clean_link = cur_parsed_url.geturl()
+    count_subdomain(cur_parsed_url)
 
     # extract links
     links = []
@@ -85,35 +74,31 @@ def extract_next_links(url, resp):
         if is_valid(link):
             valid_links.append(link)
 
-    if len(valid_links) == 0:
-        return []
-
     links_res = []
+    append_to_file("frontier_list.txt", resp.url, False)
+
     for link in valid_links:
         parsed_url = urlparse(link)._replace(fragment="")
         clean_link = parsed_url.geturl()
-        # if link has already been or will be crawled
+        # if link has already been or will be crawled, skip this link
         if clean_link in crawled_links or clean_link in added_frontier_links:
-            break
-        # if domain and first segment of path is repeated over the threshold
+            continue
+        # if domain and first segment of path is repeated over the threshold, skip this link
         if not is_below_count_domain_path(parsed_url):
-            write_skipped_link(resp.url)
-            break
+            append_to_file("skipped_list.txt", clean_link, False)
+            continue
         # decided link will be added to frontier
         added_frontier_links.add(clean_link)
+        append_to_file("frontier_list.txt", clean_link, True)
         links_res.append(clean_link)
 
     return links_res
 
-def write_skipped_link(link):
-    # append skipped link to file
-    f = open("skipped_list.txt", "a")
-    f.write(link + '\n')
-    f.close()
-
-def write_crawled_link(link):
-    # append crawled link to file
-    f = open("crawled_list.txt", "a")
+def append_to_file(o_file, link, is_tab):
+    # append link to output file. if is_tab is true, will write a tab in front
+    f = open(o_file, "a")
+    if is_tab:
+        f.write('\t')
     f.write(link + '\n')
     f.close()
 
@@ -137,10 +122,9 @@ def write_report(url):
 
     sorted_dict = [(v, k) for k, v in words_dict.items()]
     sorted_dict.sort(reverse=True)
-
     report.write("\nsorted words:\n")
     for i, (count, word) in enumerate(islice(sorted_dict, 50)):
-        report.write(str(i) + ". "+ word + ", " + str(count) + '\n')
+        report.write(str(i + 1) + ". "+ word + ": " + str(count) + '\n')
     report.close()
 
 def count_subdomain(parsed_url):
@@ -178,17 +162,9 @@ def tokenize(text):
     for word in text.split():
         if word not in stop_words:
             tokens.add(word)
+            update_count(word, words_dict)
     tokens = list(tokens)
     return tokens
-
-def count_words(text):
-    # update words dictionary of word and count
-    all_words = text.split()
-    for word in all_words:
-        if word in words_dict and word not in stop_words:
-            words_dict[word] += 1
-        elif word not in words_dict and word not in stop_words:
-            words_dict[word] = 1
 
 def is_below_count_domain_path(parsed_url):
     # update domain path dict
@@ -205,7 +181,6 @@ def is_below_count_domain_path(parsed_url):
     else:
         domain_path_dict[combined] = 1
     return True
-
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
