@@ -41,7 +41,7 @@ def extract_next_links(url, resp):
 
     # if status is client error or server error, do not crawl link
     if resp.status >= 400:
-        append_to_file("skipped_list.txt", resp.url, True)
+        #append_to_file("skipped_list.txt", resp.url, True)
         return []
 
     # code from https://beautiful-soup-4.readthedocs.io/en/latest/
@@ -51,7 +51,7 @@ def extract_next_links(url, resp):
 
     # decide to crawl link
     crawled_links.add(resp.url)
-    append_to_file("all_crawled_list.txt", resp.url, False)
+    #append_to_file("all_crawled_list.txt", resp.url, False)
 
     # count words & update word dict
     total_words = len(tokenize(text))
@@ -75,7 +75,7 @@ def extract_next_links(url, resp):
             valid_links.append(link)
 
     links_res = []
-    append_to_file("frontier_list.txt", resp.url, False)
+    #append_to_file("frontier_list.txt", resp.url, False)
 
     for link in valid_links:
         parsed_url = urlparse(link)._replace(fragment="")
@@ -85,11 +85,11 @@ def extract_next_links(url, resp):
             continue
         # if domain and first segment of path is repeated over the threshold, skip this link
         if not is_below_count_domain_path(parsed_url):
-            append_to_file("skipped_list.txt", clean_link, False)
+            #append_to_file("skipped_list.txt", clean_link, False)
             continue
         # decided link will be added to frontier
         added_frontier_links.add(clean_link)
-        append_to_file("frontier_list.txt", clean_link, True)
+        #append_to_file("frontier_list.txt", clean_link, True)
         links_res.append(clean_link)
 
     return links_res
